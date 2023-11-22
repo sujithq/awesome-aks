@@ -100,7 +100,7 @@ resource "azurerm_load_test" "xke" {
   name                = "altshared${random_string.xke.result}"
   resource_group_name = azurerm_resource_group.xke.name
   location            = azurerm_resource_group.xke.location
-  tags = azurerm_resource_group.xke.tags
+  tags                = azurerm_resource_group.xke.tags
 }
 
 module "xke" {

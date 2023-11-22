@@ -18,25 +18,25 @@ resource "azurerm_role_assignment" "xke_rg_rbac_user" {
   principal_id         = data.azuread_user.xke[each.key].object_id
 }
 
-resource "azuread_application" "xke" {
-  for_each = var.users
-  display_name = "xke user ${each.key}"
-  owners       = [data.azuread_user.xke[each.key].object_id]
-}
+# resource "azuread_application" "xke" {
+#   for_each = var.users
+#   display_name = "xke user ${each.key}"
+#   owners       = [data.azuread_user.xke[each.key].object_id]
+# }
 
-resource "azuread_service_principal" "xke" {
-  for_each = var.users
-  client_id               = azuread_application.xke[each.key].client_id
-  app_role_assignment_required = true
-  owners                       = [data.azuread_user.xke[each.key].object_id]
-}
+# resource "azuread_service_principal" "xke" {
+#   for_each = var.users
+#   client_id               = azuread_application.xke[each.key].client_id
+#   app_role_assignment_required = true
+#   owners                       = [data.azuread_user.xke[each.key].object_id]
+# }
 
-resource "azurerm_role_assignment" "xke_sp_rbac" {
-  for_each = var.users
-  scope                = azurerm_resource_group.xke[each.key].id
-  role_definition_name = "Owner"
-  principal_id         = azuread_service_principal.xke[each.key].object_id
-}
+# resource "azurerm_role_assignment" "xke_sp_rbac" {
+#   for_each = var.users
+#   scope                = azurerm_resource_group.xke[each.key].id
+#   role_definition_name = "Owner"
+#   principal_id         = azuread_service_principal.xke[each.key].object_id
+# }
 
 resource "azurerm_container_registry" "xke" {
   for_each = var.users
@@ -48,9 +48,24 @@ resource "azurerm_container_registry" "xke" {
   anonymous_pull_enabled = true
 }
 
+# locals {
+#   filtered_users = [for user in var.users : user 
+#                     if data.azuread_user.xke[user].object_id != data.azurerm_client_config.xke.object_id]
+# }
+
+variable "filtered_users" {
+  description = "List of users that meet the condition"
+  type        = list(string)
+  default     = []
+}
+
 locals {
-  filtered_users = [for user in var.users : user 
-                    if data.azuread_user.xke[user].object_id != data.azurerm_client_config.xke.object_id]
+  filtered_users_map = {
+    for user_key, user in var.users :
+    user_key => user if data.azuread_user.xke[user_key].object_id != data.azurerm_client_config.xke.object_id
+  }
+
+  filtered_users = [for user_key, _ in local.filtered_users_map : user_key]
 }
 
 resource "azurerm_kubernetes_cluster" "xke" {
@@ -86,6 +101,7 @@ resource "azurerm_kubernetes_cluster" "xke" {
 
   service_mesh_profile {
     mode = "Istio"
+    external_ingress_gateway_enabled = true
   }
 
   workload_autoscaler_profile {
@@ -395,7 +411,7 @@ resource "azurerm_key_vault_certificate" "ratify-cert" {
 }
 
 resource "azurerm_role_assignment" "xke_amg_rbac_user" {
-  for_each = toset(local.filtered_users)
+  for_each = { for user in var.filtered_users : user => local.filtered_users_map[user] }
   scope                = var.managed_grafana_resource_id
   role_definition_name = "Grafana Admin"
   principal_id         = data.azuread_user.xke[each.key].object_id
@@ -409,14 +425,14 @@ resource "azurerm_role_assignment" "xke_amg_rbac_useridentity" {
 }
 
 resource "azurerm_role_assignment" "xke_mcrg_rbac_user" {
-  for_each = toset(local.filtered_users)
+  for_each = { for user in var.filtered_users : user => local.filtered_users_map[user] }
   role_definition_name = "Owner"
   scope                = azurerm_kubernetes_cluster.xke[each.key].node_resource_group_id
   principal_id         = data.azuread_user.xke[each.key].object_id
 }
 
 resource "azurerm_role_assignment" "xke_sharedrg_rbac_user" {
-  for_each = toset(local.filtered_users)
+  for_each = { for user in var.filtered_users : user => local.filtered_users_map[user] }
   role_definition_name = "Owner"
   scope                = var.shared_resource_group_id
   principal_id         = data.azuread_user.xke[each.key].object_id
