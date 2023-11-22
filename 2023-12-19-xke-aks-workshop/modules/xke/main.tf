@@ -48,11 +48,6 @@ resource "azurerm_container_registry" "xke" {
   anonymous_pull_enabled = true
 }
 
-# locals {
-#   filtered_users = [for user in var.users : user 
-#                     if data.azuread_user.xke[user].object_id != data.azurerm_client_config.xke.object_id]
-# }
-
 variable "filtered_users" {
   description = "List of users that meet the condition"
   type        = list(string)
@@ -108,10 +103,6 @@ resource "azurerm_kubernetes_cluster" "xke" {
     keda_enabled = true
   }
 
-  # web_app_routing {
-  #   dns_zone_id = ""
-  # }
-
   lifecycle {
     ignore_changes = [
       monitor_metrics
@@ -128,17 +119,15 @@ resource "azurerm_role_assignment" "xke_acr_rbac_aks" {
 }
 
 # use local provisioner to enable istio ingress gateway on each AKS cluster
-resource "null_resource" "xke" {
-  for_each = var.users
-
-  provisioner "local-exec" {
-    command = "az aks mesh enable-ingress-gateway --resource-group ${azurerm_resource_group.xke[each.key].name} --name ${azurerm_kubernetes_cluster.xke[each.key].name} --ingress-gateway-type external"
-  }
-
-  depends_on = [
-    azurerm_kubernetes_cluster.xke,
-  ]
-}
+# resource "null_resource" "xke" {
+#   for_each = var.users
+#   provisioner "local-exec" {
+#     command = "az aks mesh enable-ingress-gateway --resource-group ${azurerm_resource_group.xke[each.key].name} --name ${azurerm_kubernetes_cluster.xke[each.key].name} --ingress-gateway-type external"
+#   }
+#   depends_on = [
+#     azurerm_kubernetes_cluster.xke,
+#   ]
+# }
 
 # resource "azurerm_storage_account" "xke" {
 #   count                    = var.user_count
@@ -161,12 +150,12 @@ resource "azurerm_user_assigned_identity" "xke" {
   for_each = var.users
   location            = azurerm_resource_group.xke[each.key].location
   resource_group_name = azurerm_resource_group.xke[each.key].name
-  name                = "aks-user${each.key}-identity"
+  name                = "aks-user-${each.key}-identity"
 }
 
 resource "azurerm_federated_identity_credential" "xke_ava" {
   for_each = var.users
-  name                = "aks-user${each.key}-federated-default"
+  name                = "aks-user-${each.key}-federated-default"
   resource_group_name = azurerm_resource_group.xke[each.key].name
   issuer              = azurerm_kubernetes_cluster.xke[each.key].oidc_issuer_url
   parent_id           = azurerm_user_assigned_identity.xke[each.key].id
@@ -178,7 +167,7 @@ resource "azurerm_federated_identity_credential" "xke_ava" {
 
 resource "azurerm_federated_identity_credential" "xke_rat" {
   for_each = var.users
-  name                = "aks-user${each.key}-federated-ratify"
+  name                = "aks-user-${each.key}-federated-ratify"
   resource_group_name = azurerm_resource_group.xke[each.key].name
   issuer              = azurerm_kubernetes_cluster.xke[each.key].oidc_issuer_url
   parent_id           = azurerm_user_assigned_identity.xke[each.key].id

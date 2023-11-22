@@ -28,11 +28,6 @@ provider "azurerm" {
 data "azurerm_client_config" "xke" {}
 data "azuread_domains" "xke" {}
 
-resource "random_password" "xke" {
-  length  = 16
-  special = true
-}
-
 resource "random_string" "xke" {
   length  = 4
   lower   = true
@@ -108,12 +103,9 @@ module "xke" {
 
   for_each = { for u in var.deployment_locations : u.location => u }
 
-  # user_count                        = each.value["count"]
-  # user_offset                       = each.value["offset"]
   users    = each.value["users"]
   location = each.value["location"]
   vm_sku   = each.value["vm_sku"]
-  # user_password                     = random_password.xke.result
   primary_domain                    = data.azuread_domains.xke.domains[6].domain_name
   unique_string                     = random_string.xke.result
   shared_resource_group_id          = azurerm_resource_group.xke.id
